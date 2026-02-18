@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ZAMA EHS & ERT Tracker</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f4f7f9; margin: 0; padding: 15px; }
+        .card { background: white; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); max-width: 450px; margin: auto; overflow: hidden; border: 1px solid #ddd; }
+        header { background: #004a99; color: white; padding: 25px 15px; text-align: center; }
+        
+        /* Target Header */
+        .target-box { background: #e8f0fe; padding: 20px; border-bottom: 2px solid #cfe0fc; text-align: center; }
+        .target-box label { display: block; font-size: 11px; font-weight: bold; color: #004a99; margin-bottom: 8px; letter-spacing: 1px; }
+        .target-input { width: 120px; padding: 12px; font-size: 24px; border: 2px solid #004a99; border-radius: 12px; text-align: center; color: #004a99; font-weight: bold; }
+
+        /* Department List */
+        .list-container { max-height: 400px; overflow-y: auto; }
+        .row { display: flex; justify-content: space-between; align-items: center; padding: 14px 25px; border-bottom: 1px solid #eee; }
+        .name { font-weight: 600; color: #333; font-size: 16px; }
+        .qty { width: 85px; padding: 10px; border: 1px solid #ccc; border-radius: 8px; text-align: center; font-size: 18px; background: #fafafa; }
+        .qty:focus { border-color: #004a99; outline: none; background: #fff; }
+
+        /* Summary Area */
+        .summary-box { margin: 20px; padding: 25px; border-radius: 15px; text-align: center; transition: all 0.3s ease; }
+        .status-default { background: #6c757d; color: white; }
+        .status-short { background: #d9534f; color: white; box-shadow: 0 4px 15px rgba(217, 83, 79, 0.3); } 
+        .status-ok { background: #28a745; color: white; box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3); }
+        
+        .total-label { font-size: 13px; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px; }
+        .total-num { font-size: 50px; font-weight: 900; display: block; line-height: 1; margin: 10px 0; }
+        .diff-msg { font-size: 15px; font-weight: bold; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 10px; }
+
+        /* Actions */
+        .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 20px 20px; }
+        button { padding: 16px; border: none; border-radius: 12px; color: white; font-weight: bold; font-size: 15px; cursor: pointer; transition: transform 0.1s; }
+        button:active { transform: scale(0.96); opacity: 0.9; }
+
+        .footer-info { text-align: center; padding-bottom: 20px; font-size: 11px; color: #999; font-weight: 500; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <header>
+        <div style="font-size: 22px; font-weight: 800; letter-spacing: 1px;">ZAMA EHS & ERT</div>
+        <div style="font-size: 12px; opacity: 0.8; margin-top: 4px;">EMERGENCY HEADCOUNT RECONCILIATION</div>
+    </header>
+
+    <div class="target-box">
+        <label>SECURITY SYSTEM COUNT</label>
+        <input type="number" id="target-num" class="target-input" placeholder="0" oninput="calculate()">
+    </div>
+
+    <div class="list-container">
+        <div class="row"><span class="name">WS1</span><input type="number" class="qty" placeholder="0" oninput="calculate()"></div>
+        <div class="row"><span class="name">WS2</span><input type="number" class="qty" placeholder="0" oninput="calculate()"></div>
+        <div class="row"><span class="name">WS3</span><input type="number" class="qty" placeholder="0" oninput="calculate()"></div>
+        <div class="row"><span class="name">Facilities</span><input type="number" class="qty" placeholder="0" oninput="calculate()"></div>
+        <div class="row"><span class="name">Maintenance</span><input type="number" class="qty" placeholder="0" oninput="calculate()"></div>
+        <div class="row"><span class="name">Warehouse</span><input type="number" class="qty" placeholder="0" oninput="calculate()"></div>
+        <div class="row"><span class="name">HR / Admin</span><input type="number" class="qty" placeholder="0" oninput="calculate()"></div>
+        <div class="row"><span class="name">Contractors</span><input type="number" class="qty" placeholder="0" oninput="calculate()"></div>
+    </div>
+
+    <div id="status-card" class="summary-box status-default">
+        <span class="total-label">Actual Headcount</span>
+        <span id="actual-total" class="total-num">0</span>
+        <div id="message" class="diff-msg">Awaiting Security Count...</div>
+    </div>
+
+    <div class="btns">
+        <button style="background: #28a745" onclick="exportData()">DOWNLOAD CSV</button>
+        <button style="background: #a8adb3" onclick="resetAll()">RESET ALL</button>
+    </div>
+
+    <div class="footer-info">
+        LAST LOG: <span id="timestamp">NEVER</span>
+    </div>
+</div>
+
+<script>
+    function calculate() {
+        // 1. Get Actual Total
+        var actual = 0;
+        var inputs = document.getElementsByClassName('qty');
+        for (var i = 0; i < inputs.length; i++) {
+            actual += (Number(inputs[i].value) || 0);
+        }
+        document.getElementById('actual-total').innerText = actual;
+
+        // 2. Reconciliation Logic
+        var target = Number(document.getElementById('target-num').value) || 0;
+        var statusCard = document.getElementById('status-card');
+        var msg = document.getElementById('message');
+
+        if (target <= 0) {
+            statusCard.className = "summary-box status-default";
+            msg.innerText = "Please input target count";
+        } else if (actual < target) {
+            statusCard.className = "summary-box status-short";
+            msg.innerText = "⚠️ MISSING: " + (target - actual) + " PERSON(S)";
+        } else if (actual === target) {
+            statusCard.className = "summary-box status-ok";
+            msg.innerText = "✅ ALL ACCOUNTED FOR";
+        } else {
+            statusCard.className = "summary-box status-ok";
+            msg.innerText = "➕ EXTRA: " + (actual - target) + " UNIDENTIFIED";
+        }
+
+        // 3. Final Touch: Live Timestamp
+        var now = new Date();
+        document.getElementById('timestamp').innerText = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+    }
+
+    function resetAll() {
+        if(confirm("Confirm: Clear all drill data?")) {
+            document.getElementById('target-num').value = "";
+            var q = document.getElementsByClassName('qty');
+            for (var i=0; i<q.length; i++) { q[i].value = ""; }
+            calculate();
+            document.getElementById('timestamp').innerText = "CLEARED";
+        }
+    }
+
+    function exportData() {
+        var csv = "ZAMA EHS HEADCOUNT REPORT\n";
+        csv += "Generated: " + new Date().toLocaleString() + "\n\n";
+        csv += "Department,Count\n";
+        
+        var rows = document.getElementsByClassName('row');
+        for (var i=0; i<rows.length; i++) {
+            var n = rows[i].querySelector('.name').innerText;
+            var v = rows[i].querySelector('.qty').value || 0;
+            csv += n + "," + v + "\n";
+        }
+        
+        csv += "\nSECURITY TARGET," + document.getElementById('target-num').value + "\n";
+        csv += "ACTUAL ACCOUNTED," + document.getElementById('actual-total').innerText + "\n";
+        
+        var blob = new Blob([csv], {type: 'text/csv'});
+        var url = window.URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = "Zama_EHS_Report.csv";
+        a.click();
+    }
+</script>
+
+</body>
+</html>
